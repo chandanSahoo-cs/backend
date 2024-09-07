@@ -4,15 +4,16 @@ import { apiError } from "../utils/apiError.js";
 import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { apiResponse } from "../utils/apiResponse.js";
+import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 const registerUser = asyncHandler(async (req, res) => {
-  // Get user details from frontend
   const createPayload = req.body;
   const parsePayload = userType.safeParse(createPayload);
 
   if (!parsePayload.success) {
     const usernameError = parsePayload.error.formErrors.fieldErrors.username;
     const emailError = parsePayload.error.formErrors.fieldErrors.email;
-    const fullNameError = parsePayload.error.formErrors.fieldErrors.fullname;
+    const fullNameError = parsePayload.error.formErrors.fieldErrors.fullName;
     const passwordError = parsePayload.error.formErrors.fieldErrors.password;
 
     if (usernameError) throw new apiError(400, usernameError[0]);
@@ -21,7 +22,7 @@ const registerUser = asyncHandler(async (req, res) => {
     if (passwordError) throw new apiError(400, passwordError[0]);
   }
 
-  const { username, email, fullName, avatar, password } = createPayload;
+  const { username, email, fullName, password } = createPayload;
 
   const existedUser = await User.findOne({
     $or: [{ username }, { email }],
@@ -50,30 +51,32 @@ const registerUser = asyncHandler(async (req, res) => {
   const avatarUrl = await uploadOnCloudinary(avatarLocalPath);
   const coverImageUrl = await uploadOnCloudinary(coverImageLocalPath);
 
-  if(!avatarUrl){
-    throw new apiError(400, "Avatar file is required")
+  if (!avatarUrl) {
+    throw new apiError(400, "Failed to upload avatar.");
   }
-  
+
   const newUser = await User.create({
-    username : username.toLowerCase(),
+    username: username.toLowerCase(),
     email,
     fullName,
     password,
-    avatar: avatarUrl.url,
-    coverImage: coverImageLocalPath?.url || "",
+    avatar: avatarUrl,
+    coverImage: coverImageUrl || "",
   });
 
-  const createdNewUser = User.findById(newUser._id).select(
+  const createdNewUser = await User.findById(newUser._id).select(
     "-password -refreshToken"
-  )
+  );
 
-  if(!createdNewUser){
-    throw new apiError(500,"Something went wrong while registering the user")
+  if (!createdNewUser) {
+    throw new apiError(500, "Something went wrong while registering the user.");
   }
 
-  res.status(201).json(
-    new apiResponse(200,createdNewUser,"User registered successfully")
-  );
+  res
+    .status(201)
+    .json(
+      new apiResponse(200, createdNewUser, "User registered successfully.")
+    );
 });
 
 export { registerUser };
